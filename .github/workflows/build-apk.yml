@@ -33,16 +33,30 @@ jobs:
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
           echo "Project root detected: $ROOT"
 
-      - name: Remove stray Termux-specific local.properties overrides
+      - name: Diagnose and remove Termux-specific overrides anywhere in repo
         working-directory: ${{ steps.find_root.outputs.root }}
         run: |
-          if [ -f "local.properties" ]; then
-            echo "Found local.properties, contents:"
-            cat local.properties
-            echo "Removing any aapt2/Termux-specific paths..."
-            sed -i '/com\.termux/d' local.properties
-            sed -i '/aapt2/Id' local.properties
-          fi
+          echo "== Searching entire repo for the Termux aapt2 override =="
+          grep -rn "com.termux" . --include="*.properties" --include="*.gradle" --include="*.gradle.kts" || echo "No matches in property/gradle files"
+          grep -rln "com.termux" . 2>/dev/null | grep -v "^\./\.git" || echo "No matches anywhere"
+          echo "== Removing com.termux references from all properties/gradle files =="
+          find . -type f \( -name "*.properties" -o -name "*.gradle" -o -name "*.gradle.kts" \) -not -path "*/.git/*" | while read -r f; do
+            if grep -q "com.termux" "$f" 2>/dev/null; then
+              echo "Cleaning: $f"
+              sed -i '/com\.termux/d' "$f"
+            fi
+          done
+          echo "== Ensuring root gradle.properties does not force aapt2 path =="
+          for GP in gradle.properties app/gradle.properties; do
+            if [ -f "$GP" ]; then
+              echo "--- $GP ---"
+              cat "$GP"
+            fi
+          done
+
+      - name: Force correct local.properties
+        working-directory: ${{ steps.find_root.outputs.root }}
+        run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           echo "Final local.properties:"
           cat local.properties
