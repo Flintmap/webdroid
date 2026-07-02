@@ -18,6 +18,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Find project root (folder with settings.gradle)
         id: find_root
         run: |
@@ -29,6 +32,20 @@ jobs:
           fi
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
           echo "Project root detected: $ROOT"
+
+      - name: Remove stray Termux-specific local.properties overrides
+        working-directory: ${{ steps.find_root.outputs.root }}
+        run: |
+          if [ -f "local.properties" ]; then
+            echo "Found local.properties, contents:"
+            cat local.properties
+            echo "Removing any aapt2/Termux-specific paths..."
+            sed -i '/com\.termux/d' local.properties
+            sed -i '/aapt2/Id' local.properties
+          fi
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "Final local.properties:"
+          cat local.properties
 
       - name: Ensure Gradle wrapper exists
         working-directory: ${{ steps.find_root.outputs.root }}
